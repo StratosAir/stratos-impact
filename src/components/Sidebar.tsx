@@ -1,10 +1,11 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, Table2, Settings, ChevronRight, Plane, TrendingUp, AlertTriangle } from 'lucide-react'
+import { LayoutDashboard, Table2, Settings, ChevronRight, Plane, TrendingUp, AlertTriangle, Lightbulb } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const navItems = [
-  { label: 'Dashboard', icon: LayoutDashboard, to: '/dashboard' },
-  { label: 'Measure Portfolio', icon: Table2, to: '/portfolio' },
+  { label: 'Dashboard',          icon: LayoutDashboard, to: '/dashboard' },
+  { label: 'Measure Portfolio',  icon: Table2,          to: '/portfolio' },
+  { label: 'Ideation Assistant', icon: Lightbulb,       to: '/ideation'  },
 ]
 
 const secondaryItems = [

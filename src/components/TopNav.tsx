@@ -2,8 +2,9 @@ import { Bell, Search, ChevronDown, RefreshCw } from 'lucide-react'
 import { useLocation } from 'react-router-dom'
 
 const pageTitles: Record<string, { title: string; subtitle: string }> = {
-  '/dashboard': { title: 'Executive Dashboard', subtitle: 'Program Overview — Project Horizon' },
-  '/portfolio': { title: 'Measure Portfolio', subtitle: 'All transformation measures' },
+  '/dashboard': { title: 'Executive Dashboard',   subtitle: 'Program Overview — Project Horizon'         },
+  '/portfolio': { title: 'Measure Portfolio',      subtitle: 'All transformation measures'                },
+  '/ideation':  { title: 'Ideation Assistant',     subtitle: 'Guided measure intake — Project Horizon'    },
 }
 
 export default function TopNav() {
