@@ -1,11 +1,12 @@
 import { useParams, Link } from 'react-router-dom'
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis,
-  CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine
+  CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
 import {
   ArrowLeft, User, Building2, Target, TrendingUp, CheckCircle2,
-  AlertTriangle, Clock, ChevronRight, Users, Calendar, Tag, Layers
+  AlertTriangle, Clock, ChevronRight, Users, Calendar, Tag, Layers,
+  TrendingDown,
 } from 'lucide-react'
 import { getMeasureById } from '@/data/measures'
 import { formatCurrency, calcAchievement } from '@/lib/utils'
@@ -14,7 +15,8 @@ import type { DILevel } from '@/types'
 
 const DI_LEVELS: DILevel[] = ['DI0', 'DI1', 'DI2', 'DI3', 'DI4', 'DI5']
 const DI_LABELS: Record<DILevel, string> = {
-  DI0: 'Idea', DI1: 'Identified', DI2: 'Validated', DI3: 'Approved', DI4: 'Implemented', DI5: 'Sustainable',
+  DI0: 'Idea', DI1: 'Identified', DI2: 'Validated',
+  DI3: 'Approved', DI4: 'Implemented', DI5: 'Sustainable',
 }
 
 export default function MeasureDetail() {
@@ -37,6 +39,7 @@ export default function MeasureDetail() {
 
   return (
     <div className="p-6 space-y-5 max-w-screen-2xl">
+
       {/* Breadcrumb & Header */}
       <div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
@@ -45,6 +48,25 @@ export default function MeasureDetail() {
           </Link>
           <ChevronRight className="w-3 h-3" />
           <span className="text-foreground font-medium">{measure.id}</span>
+        </div>
+
+        {/* Organization hierarchy path — prominent breadcrumb */}
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-3 flex-wrap">
+          <span className="bg-slate-100 border border-slate-200 rounded px-2 py-0.5 font-medium text-slate-700">
+            {measure.businessUnit}
+          </span>
+          <ChevronRight className="w-3 h-3 shrink-0" />
+          <span className="bg-slate-100 border border-slate-200 rounded px-2 py-0.5 text-slate-600">
+            {measure.division}
+          </span>
+          <ChevronRight className="w-3 h-3 shrink-0" />
+          <span className="bg-blue-50 border border-blue-200 rounded px-2 py-0.5 text-blue-700 font-medium">
+            {measure.program}
+          </span>
+          <ChevronRight className="w-3 h-3 shrink-0" />
+          <span className="bg-slate-50 border border-slate-200 rounded px-2 py-0.5 text-slate-600">
+            {measure.workstream}
+          </span>
         </div>
 
         <div className="flex flex-wrap items-start justify-between gap-4">
@@ -76,7 +98,7 @@ export default function MeasureDetail() {
       {/* DI Progress Bar */}
       <div className="bg-white rounded-xl border border-border p-5 shadow-sm">
         <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-4">Lifecycle Progress</h3>
-        <div className="flex items-center gap-0">
+        <div className="flex items-center">
           {DI_LEVELS.map((di, i) => {
             const isDone = i <= currentDIIndex
             const isCurrent = i === currentDIIndex
@@ -116,53 +138,68 @@ export default function MeasureDetail() {
 
       {/* Main Content — 3 columns */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+
         {/* Left — Metadata */}
         <div className="lg:col-span-3 space-y-4">
+
           {/* Organization */}
-          <div className="bg-white rounded-xl border border-border p-4 shadow-sm space-y-3">
-            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Organization</h3>
-            <OrgRow icon={<Building2 className="w-3.5 h-3.5" />} label="Business Unit" value={measure.businessUnit} />
-            <OrgRow icon={<Layers className="w-3.5 h-3.5" />} label="Division" value={measure.division} />
-            <OrgRow icon={<Target className="w-3.5 h-3.5" />} label="Program" value={measure.program} />
-            <OrgRow icon={<ChevronRight className="w-3.5 h-3.5" />} label="Workstream" value={measure.workstream} />
-            <div className="border-t border-border pt-3 space-y-3">
-              <OrgRow icon={<User className="w-3.5 h-3.5" />} label="Measure Owner" value={measure.owner} highlight />
-              <OrgRow icon={<Users className="w-3.5 h-3.5" />} label="Sponsor" value={measure.sponsor} />
+          <div className="bg-white rounded-xl border border-border p-4 shadow-sm">
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Organization</h3>
+            <div className="space-y-0 border border-border rounded-lg overflow-hidden">
+              <OrgHierarchyRow icon={<Building2 className="w-3.5 h-3.5" />} label="Business Unit" value={measure.businessUnit} depth={0} />
+              <OrgHierarchyRow icon={<Layers className="w-3.5 h-3.5" />} label="Division" value={measure.division} depth={1} />
+              <OrgHierarchyRow icon={<Target className="w-3.5 h-3.5" />} label="Program" value={measure.program} depth={2} highlight />
+              <OrgHierarchyRow icon={<ChevronRight className="w-3.5 h-3.5" />} label="Workstream" value={measure.workstream} depth={3} />
+            </div>
+            <div className="mt-3 space-y-2.5 pt-3 border-t border-border">
+              <div className="flex items-center gap-2.5">
+                <User className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Measure Owner</p>
+                  <p className="text-xs font-semibold text-foreground mt-0.5">{measure.owner}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2.5">
+                <Users className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Sponsor</p>
+                  <p className="text-xs text-foreground mt-0.5">{measure.sponsor}</p>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Classification */}
-          <div className="bg-white rounded-xl border border-border p-4 shadow-sm space-y-3">
-            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Classification</h3>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Category</p>
-                <CategoryBadge category={measure.category} />
+          {/* Classification — prominent */}
+          <div className="bg-white rounded-xl border border-border p-4 shadow-sm">
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Classification</h3>
+
+            {/* Category + Type as large badges */}
+            <div className="flex items-center gap-2 mb-3">
+              <CategoryBadge category={measure.category} className="text-xs px-2.5 py-1" />
+              <span className="text-xs bg-slate-100 text-slate-700 border border-slate-200 rounded-md px-2.5 py-1 font-medium">
+                {measure.type}
+              </span>
+            </div>
+
+            <div className="space-y-2.5">
+              <ClassRow label="P&L Line" value={measure.pnlLine} />
+              <div className="flex items-start gap-2">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide w-20 shrink-0 pt-0.5">Risk Level</p>
+                <RiskBadge level={measure.riskLevel} />
               </div>
-              <div>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Type</p>
-                <span className="text-xs font-medium text-foreground">{measure.type}</span>
-              </div>
-            </div>
-            <div>
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">P&L Line</p>
-              <p className="text-xs font-medium text-foreground">{measure.pnlLine}</p>
-            </div>
-            <div>
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Risk Level</p>
-              <RiskBadge level={measure.riskLevel} />
-            </div>
-            <div>
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Timeline</p>
-              <div className="flex items-center gap-1.5 text-xs text-foreground">
-                <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
-                <span>{measure.startDate}</span>
-                <span className="text-muted-foreground">→</span>
-                <span className="font-semibold">{measure.targetDate}</span>
+              <div className="flex items-start gap-2">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide w-20 shrink-0 pt-0.5">Timeline</p>
+                <div className="flex items-center gap-1 text-xs text-foreground">
+                  <Calendar className="w-3 h-3 text-muted-foreground" />
+                  <span>{measure.startDate}</span>
+                  <span className="text-muted-foreground">→</span>
+                  <span className="font-semibold">{measure.targetDate}</span>
+                </div>
               </div>
             </div>
+
             {measure.tags.length > 0 && (
-              <div>
+              <div className="mt-3 pt-3 border-t border-border">
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1.5">Tags</p>
                 <div className="flex flex-wrap gap-1">
                   {measure.tags.map(t => (
@@ -178,6 +215,7 @@ export default function MeasureDetail() {
 
         {/* Center — Impact & Charts */}
         <div className="lg:col-span-6 space-y-4">
+
           {/* Impact KPIs */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <ImpactCard label="Target Impact" value={formatCurrency(measure.targetImpact)} accent="slate" />
@@ -198,7 +236,32 @@ export default function MeasureDetail() {
               value={`${gap >= 0 ? '+' : ''}${formatCurrency(gap)}`}
               sub={gap >= 0 ? 'Above target' : 'Below target'}
               accent={gap >= 0 ? 'green' : 'red'}
+              icon={gap >= 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
             />
+          </div>
+
+          {/* Forecast Gap — detail card */}
+          <div className={`rounded-xl border p-4 ${gap >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Forecast Gap Analysis</h3>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Target</p>
+                <p className="text-base font-bold text-foreground">{formatCurrency(measure.targetImpact)}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Forecast</p>
+                <p className="text-base font-bold text-foreground">{formatCurrency(measure.forecastImpact)}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Gap</p>
+                <p className={`text-base font-bold ${gap >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                  {gap >= 0 ? '+' : ''}{formatCurrency(gap)}
+                </p>
+                <p className={`text-[10px] mt-0.5 font-medium ${gap >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                  {gap >= 0 ? '+' : ''}{gapPct}% vs target
+                </p>
+              </div>
+            </div>
           </div>
 
           {/* Impact Trend Chart */}
@@ -209,7 +272,7 @@ export default function MeasureDetail() {
                 <p className="text-xs text-muted-foreground mt-0.5">Monthly impact in €K</p>
               </div>
               <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-blue-400 inline-block rounded" style={{ borderStyle: 'dashed' }} />Target</span>
+                <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-blue-400 inline-block rounded" />Target</span>
                 <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-emerald-500 inline-block rounded" />Forecast</span>
                 <span className="flex items-center gap-1.5"><span className="w-3 h-2 bg-teal-400/40 inline-block rounded" />Realized</span>
               </div>
@@ -224,14 +287,18 @@ export default function MeasureDetail() {
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                 <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false} tickFormatter={v => `€${(v/1000).toFixed(0)}K`} />
+                <YAxis tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false}
+                  tickFormatter={(v: number) => `€${(v / 1000).toFixed(0)}K`} />
                 <Tooltip
                   contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e2e8f0' }}
-                  formatter={(value: number) => [`€${(value/1000).toFixed(0)}K`]}
+                  formatter={(value: unknown) => [`€${(Number(value) / 1000).toFixed(0)}K`]}
                 />
-                <Area type="monotone" dataKey="target" stroke="#93C5FD" strokeWidth={1.5} strokeDasharray="5 3" fill="none" dot={false} name="Target" />
-                <Area type="monotone" dataKey="forecast" stroke="#10B981" strokeWidth={1.5} fill="none" dot={false} name="Forecast" />
-                <Area type="monotone" dataKey="realized" stroke="#14B8A6" strokeWidth={2} fill="url(#realGrad)" dot={{ r: 2.5, fill: '#14B8A6' }} name="Realized" />
+                <Area type="monotone" dataKey="target" stroke="#93C5FD" strokeWidth={1.5}
+                  strokeDasharray="5 3" fill="none" dot={false} name="Target" />
+                <Area type="monotone" dataKey="forecast" stroke="#10B981" strokeWidth={1.5}
+                  fill="none" dot={false} name="Forecast" />
+                <Area type="monotone" dataKey="realized" stroke="#14B8A6" strokeWidth={2}
+                  fill="url(#realGrad)" dot={{ r: 2.5, fill: '#14B8A6' }} name="Realized" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -255,15 +322,20 @@ export default function MeasureDetail() {
               />
             </div>
             <div className="space-y-2">
-              <FTEBar label="Target" value={measure.fteTarget} max={Math.max(measure.fteTarget, measure.fteForecast) * 1.15} color="bg-slate-300" />
-              <FTEBar label="Forecast" value={measure.fteForecast} max={Math.max(measure.fteTarget, measure.fteForecast) * 1.15} color={measure.fteForecast <= measure.fteTarget ? 'bg-emerald-500' : 'bg-amber-500'} />
-              <FTEBar label="Realized" value={measure.fteRealized} max={Math.max(measure.fteTarget, measure.fteForecast) * 1.15} color="bg-blue-500" />
+              <FTEBar label="Target" value={measure.fteTarget}
+                max={Math.max(measure.fteTarget, measure.fteForecast) * 1.15} color="bg-slate-300" />
+              <FTEBar label="Forecast" value={measure.fteForecast}
+                max={Math.max(measure.fteTarget, measure.fteForecast) * 1.15}
+                color={measure.fteForecast <= measure.fteTarget ? 'bg-emerald-500' : 'bg-amber-500'} />
+              <FTEBar label="Realized" value={measure.fteRealized}
+                max={Math.max(measure.fteTarget, measure.fteForecast) * 1.15} color="bg-blue-500" />
             </div>
           </div>
         </div>
 
         {/* Right — Approvals, Risks, Assumptions */}
         <div className="lg:col-span-3 space-y-4">
+
           {/* Approvals */}
           <div className="bg-white rounded-xl border border-border p-4 shadow-sm">
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Approvals</h3>
@@ -279,6 +351,8 @@ export default function MeasureDetail() {
                       <DIBadge level={a.type} size="sm" />
                       <ApprovalBadge status={a.status} />
                     </div>
+                    {a.status === 'Pending' && <Clock className="w-3.5 h-3.5 text-amber-500" />}
+                    {a.status === 'Rejected' && <AlertTriangle className="w-3.5 h-3.5 text-red-500" />}
                   </div>
                   <p className="text-xs font-medium text-foreground">{a.approver}</p>
                   {a.date && <p className="text-[10px] text-muted-foreground mt-0.5">{a.date}</p>}
@@ -296,7 +370,9 @@ export default function MeasureDetail() {
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Risks</h3>
               {measure.risks.length > 0 && (
-                <span className="text-xs bg-red-50 text-red-600 border border-red-200 rounded-full px-2 py-0.5 font-semibold">{measure.risks.length}</span>
+                <span className="text-xs bg-red-50 text-red-600 border border-red-200 rounded-full px-2 py-0.5 font-semibold">
+                  {measure.risks.length}
+                </span>
               )}
             </div>
             <div className="space-y-3">
@@ -331,7 +407,9 @@ export default function MeasureDetail() {
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Assumptions</h3>
               {measure.assumptions.length > 0 && (
-                <span className="text-xs bg-blue-50 text-blue-600 border border-blue-200 rounded-full px-2 py-0.5 font-semibold">{measure.assumptions.length}</span>
+                <span className="text-xs bg-blue-50 text-blue-600 border border-blue-200 rounded-full px-2 py-0.5 font-semibold">
+                  {measure.assumptions.length}
+                </span>
               )}
             </div>
             <div className="space-y-3">
@@ -363,19 +441,42 @@ export default function MeasureDetail() {
   )
 }
 
-function OrgRow({ icon, label, value, highlight }: { icon: React.ReactNode; label: string; value: string; highlight?: boolean }) {
+// ── Sub-components ─────────────────────────────────────────────────────────────
+
+function OrgHierarchyRow({
+  icon, label, value, depth, highlight,
+}: {
+  icon: React.ReactNode; label: string; value: string; depth: number; highlight?: boolean
+}) {
+  const indent = depth * 12
   return (
-    <div className="flex items-start gap-2.5">
+    <div
+      className={`flex items-start gap-2 px-3 py-2 border-b border-border last:border-b-0 ${highlight ? 'bg-blue-50' : depth % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`}
+      style={{ paddingLeft: `${12 + indent}px` }}
+    >
       <span className="mt-0.5 text-muted-foreground shrink-0">{icon}</span>
       <div>
-        <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">{label}</p>
-        <p className={`text-xs mt-0.5 ${highlight ? 'font-semibold text-foreground' : 'text-foreground'}`}>{value}</p>
+        <p className="text-[9px] text-muted-foreground uppercase tracking-wide font-medium">{label}</p>
+        <p className={`text-xs mt-0.5 ${highlight ? 'font-semibold text-blue-700' : 'text-foreground'}`}>{value}</p>
       </div>
     </div>
   )
 }
 
-function ImpactCard({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent: string }) {
+function ClassRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-start gap-2">
+      <p className="text-[10px] text-muted-foreground uppercase tracking-wide w-20 shrink-0 pt-0.5">{label}</p>
+      <p className="text-xs font-medium text-foreground">{value}</p>
+    </div>
+  )
+}
+
+function ImpactCard({
+  label, value, sub, accent, icon,
+}: {
+  label: string; value: string; sub?: string; accent: string; icon?: React.ReactNode
+}) {
   const accentMap: Record<string, string> = {
     slate: 'bg-slate-50 border-slate-200',
     green: 'bg-emerald-50 border-emerald-200',
@@ -384,34 +485,42 @@ function ImpactCard({ label, value, sub, accent }: { label: string; value: strin
     red: 'bg-red-50 border-red-200',
     blue: 'bg-blue-50 border-blue-200',
   }
-
   const textMap: Record<string, string> = {
-    slate: 'text-slate-700',
-    green: 'text-emerald-700',
-    amber: 'text-amber-700',
-    teal: 'text-teal-700',
-    red: 'text-red-600',
-    blue: 'text-blue-700',
+    slate: 'text-slate-700', green: 'text-emerald-700',
+    amber: 'text-amber-700', teal: 'text-teal-700',
+    red: 'text-red-600', blue: 'text-blue-700',
   }
-
   return (
     <div className={`rounded-xl border p-3.5 ${accentMap[accent] ?? 'bg-slate-50 border-slate-200'}`}>
       <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium mb-1">{label}</p>
       <p className={`text-lg font-bold leading-tight ${textMap[accent] ?? 'text-foreground'}`}>{value}</p>
-      {sub && <p className="text-[10px] text-muted-foreground mt-1">{sub}</p>}
+      {sub && (
+        <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1">
+          {icon}{sub}
+        </p>
+      )}
     </div>
   )
 }
 
-function FTECard({ label, value, delta, sub, accent }: { label: string; value: number; delta?: number; sub?: string; accent: string }) {
+function FTECard({
+  label, value, delta, sub, accent,
+}: {
+  label: string; value: number; delta?: number; sub?: string; accent: string
+}) {
   const textMap: Record<string, string> = {
-    slate: 'text-slate-700', green: 'text-emerald-700', amber: 'text-amber-700', blue: 'text-blue-700',
+    slate: 'text-slate-700', green: 'text-emerald-700',
+    amber: 'text-amber-700', blue: 'text-blue-700',
   }
   return (
     <div className="text-center p-3 bg-slate-50 rounded-xl border border-border">
       <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium mb-1">{label}</p>
       <p className={`text-xl font-bold ${textMap[accent] ?? 'text-foreground'}`}>{value}</p>
-      {delta !== undefined && <p className={`text-[10px] mt-0.5 font-medium ${delta > 0 ? 'text-amber-600' : delta < 0 ? 'text-emerald-600' : 'text-slate-500'}`}>{delta > 0 ? `+${delta}` : delta} vs target</p>}
+      {delta !== undefined && (
+        <p className={`text-[10px] mt-0.5 font-medium ${delta > 0 ? 'text-amber-600' : delta < 0 ? 'text-emerald-600' : 'text-slate-500'}`}>
+          {delta > 0 ? `+${delta}` : delta} vs plan
+        </p>
+      )}
       {sub && <p className="text-[10px] text-muted-foreground mt-0.5">{sub}</p>}
     </div>
   )
