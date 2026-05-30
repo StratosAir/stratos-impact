@@ -2,7 +2,7 @@ import { Bell, Search, ChevronDown, RefreshCw } from 'lucide-react'
 import { useLocation } from 'react-router-dom'
 
 const pageTitles: Record<string, { title: string; subtitle: string }> = {
-  '/dashboard': { title: 'Executive Dashboard', subtitle: 'Program Overview — Northwind 2030' },
+  '/dashboard': { title: 'Executive Dashboard', subtitle: 'Program Overview — Project Horizon' },
   '/portfolio': { title: 'Measure Portfolio', subtitle: 'All transformation measures' },
 }
 
@@ -10,7 +10,7 @@ export default function TopNav() {
   const location = useLocation()
   const isDetail = location.pathname.includes('/portfolio/') && location.pathname !== '/portfolio'
   const key = isDetail ? '/portfolio' : location.pathname
-  const page = pageTitles[key] ?? { title: 'Transformation Tracker', subtitle: '' }
+  const page = pageTitles[key] ?? { title: 'Stratos Impact', subtitle: '' }
 
   return (
     <header className="h-16 bg-white border-b border-border flex items-center justify-between px-6 shrink-0 z-10">

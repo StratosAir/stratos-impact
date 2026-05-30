@@ -22,8 +22,8 @@ export default function Sidebar() {
           <Plane className="w-5 h-5 text-white" strokeWidth={1.5} />
         </div>
         <div>
-          <p className="text-sm font-bold text-white leading-tight tracking-tight">Northwind Airlines</p>
-          <p className="text-[11px] text-slate-400 font-medium tracking-wide uppercase">Northwind 2030</p>
+          <p className="text-sm font-bold text-white leading-tight tracking-tight">StratosAir</p>
+          <p className="text-[11px] text-slate-400 font-medium tracking-wide uppercase">Stratos Impact</p>
         </div>
       </div>
 
@@ -76,7 +76,7 @@ export default function Sidebar() {
             <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Program Status</span>
             <span className="text-[11px] font-bold text-emerald-400">Active</span>
           </div>
-          <p className="text-sm font-semibold text-white">Northwind 2030</p>
+          <p className="text-sm font-semibold text-white">Project Horizon</p>
           <p className="text-[11px] text-slate-400 mt-0.5">50 Measures · 8 Workstreams</p>
           <div className="mt-3">
             <div className="flex items-center justify-between mb-1">

@@ -1,6 +1,6 @@
-# Transformation Tracker
+# Stratos Impact
 
-Enterprise-grade Transformation Tracking Platform — Demo for **Northwind Airlines · Northwind 2030 Program**.
+Transformation management platform for **StratosAir · Project Horizon**.
 
 ## Tech Stack
 
