@@ -1,17 +1,15 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
 import {
   BarChart, Bar, Cell, AreaChart, Area, PieChart, Pie,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  ReferenceLine, Legend,
+  ReferenceLine,
 } from 'recharts'
 import {
-  TrendingUp, TrendingDown, AlertTriangle, CheckCircle2, Clock,
-  ChevronRight, Target, Activity, AlertCircle,
+  TrendingUp, TrendingDown, AlertTriangle, CheckCircle2,
+  Target, Activity,
 } from 'lucide-react'
 import { measures } from '@/data/measures'
 import { formatCurrency } from '@/lib/utils'
-import { StatusBadge, DIBadge, RiskBadge, ApprovalBadge } from '@/components/StatusBadge'
 import type { DILevel } from '@/types'
 
 const DI_LABELS: Record<DILevel, string> = {
@@ -69,7 +67,6 @@ export default function Dashboard() {
       openDI2: measures.filter(m => m.approvals.some(a => a.type === 'DI2' && a.status === 'Pending')).length,
       openDI4: measures.filter(m => m.approvals.some(a => a.type === 'DI4' && a.status === 'Pending')).length,
       highRisk: measures.filter(m => m.riskLevel === 'High' || m.riskLevel === 'Critical').length,
-      rejected: measures.filter(m => m.approvals.some(a => a.status === 'Rejected')).length,
     }
   }, [])
 
@@ -170,58 +167,28 @@ export default function Dashboard() {
     }
   }, [])
 
-  const byStatus = useMemo(() => {
-    const counts: Record<string, number> = {}
-    measures.forEach(m => { counts[m.status] = (counts[m.status] ?? 0) + 1 })
-    return Object.entries(counts).map(([name, value]) => ({ name, value }))
-  }, [])
-
   const byCategory = useMemo(() => {
     const sums: Record<string, number> = {}
     measures.forEach(m => { sums[m.category] = (sums[m.category] ?? 0) + m.targetImpact })
     return Object.entries(sums).map(([name, value]) => ({ name, value: Math.round(value / 1e6 * 10) / 10 }))
   }, [])
 
-  const byPnL = useMemo(() => {
-    const sums: Record<string, number> = {}
-    measures.forEach(m => { sums[m.pnlLine] = (sums[m.pnlLine] ?? 0) + m.targetImpact })
-    return Object.entries(sums)
-      .sort((a, b) => b[1] - a[1]).slice(0, 8)
-      .map(([name, value]) => ({ name, value: Math.round(value / 1e6 * 10) / 10 }))
-  }, [])
-
-  const criticalRisks = useMemo(() =>
-    measures
-      .flatMap(m => m.risks.map(r => ({ ...r, measureId: m.id, measureTitle: m.title })))
-      .filter(r => r.level === 'Critical' || r.level === 'High')
-      .slice(0, 6),
-    []
-  )
-
-  const openApprovals = useMemo(() =>
-    measures
-      .flatMap(m => m.approvals.filter(a => a.status === 'Pending').map(a => ({ ...a, measureId: m.id, measureTitle: m.title })))
-      .slice(0, 6),
-    []
-  )
-
   const maturityData = maturityView === 'overall' ? maturityOverall : maturityByProgram
 
-  const statusColors: Record<string, string> = {
-    'On Track': '#10B981', Watch: '#F59E0B', 'At Risk': '#EF4444',
-    Completed: '#3B82F6', Cancelled: '#94A3B8',
-  }
   const categoryColors: Record<string, string> = {
     Revenue: '#2563EB', Cost: '#F97316', Structural: '#8B5CF6',
   }
 
   return (
-    <div className="p-6 space-y-8">
+    <div className="p-8 space-y-12">
 
-      {/* ── Section 1: Program Health ──────────────────────────────── */}
+      {/* ── Section 1: Executive Summary ──────────────────────────── */}
       <section>
-        <SectionHeader title="Program Health" description="Aggregate value performance across Project Horizon" />
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <SectionHeader
+          title="Executive Summary"
+          description="Project Horizon — transformation performance at a glance"
+        />
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
           <KpiCard label="Target Impact" value={formatCurrency(kpis.targetImpact)}
             sub="Full program ambition" icon={<Target className="w-4 h-4" />} accent="blue" />
           <KpiCard label="Forecast Impact" value={formatCurrency(kpis.forecastImpact)}
@@ -233,76 +200,13 @@ export default function Dashboard() {
             icon={<CheckCircle2 className="w-4 h-4" />} accent="teal" />
           <KpiCard label="Active Measures" value={String(kpis.activeMeasures)}
             sub="Across 4 programs" icon={<Activity className="w-4 h-4" />} accent="indigo" />
+          <GovernanceCard di2={kpis.openDI2} di4={kpis.openDI4} highRisk={kpis.highRisk} />
         </div>
       </section>
 
-      {/* ── Section 2: Transformation Governance ──────────────────── */}
+      {/* ── Section 2: Transformation Maturity ────────────────────── */}
       <section>
-        <SectionHeader title="Transformation Governance" description="Approval pipeline status and risk exposure" />
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-          <KpiCard label="DI2 Pending" value={String(kpis.openDI2)}
-            sub="Awaiting validation" icon={<Clock className="w-4 h-4" />} accent="amber" />
-          <KpiCard label="DI4 Pending" value={String(kpis.openDI4)}
-            sub="Awaiting approval" icon={<Clock className="w-4 h-4" />} accent="amber" />
-          <KpiCard label="High Risk Measures" value={String(kpis.highRisk)}
-            sub="High & critical exposure" icon={<AlertTriangle className="w-4 h-4" />} accent="red" />
-          <KpiCard label="Rejected Approvals" value={String(kpis.rejected)}
-            sub="Require re-submission" icon={<AlertCircle className="w-4 h-4" />} accent="red" />
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="bg-white rounded-xl border border-border shadow-sm">
-            <div className="flex items-center justify-between p-4 border-b border-border">
-              <div>
-                <h3 className="text-sm font-semibold text-foreground">Open Approvals</h3>
-                <p className="text-xs text-muted-foreground mt-0.5">Pending DI2 &amp; DI4 decisions</p>
-              </div>
-              <Link to="/portfolio" className="text-xs text-blue-600 hover:text-blue-700 font-medium flex items-center gap-0.5">
-                View all <ChevronRight className="w-3.5 h-3.5" />
-              </Link>
-            </div>
-            <div className="divide-y divide-border">
-              {openApprovals.map((a, i) => (
-                <Link key={i} to={`/portfolio/${a.measureId}`}
-                  className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-foreground truncate">{a.measureTitle}</p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">{a.approver}</p>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <DIBadge level={a.type as 'DI2' | 'DI4'} size="sm" />
-                    <ApprovalBadge status={a.status} />
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl border border-border shadow-sm">
-            <div className="p-4 border-b border-border">
-              <h3 className="text-sm font-semibold text-foreground">Critical Risks</h3>
-              <p className="text-xs text-muted-foreground mt-0.5">High &amp; critical exposure requiring attention</p>
-            </div>
-            <div className="divide-y divide-border">
-              {criticalRisks.map(r => (
-                <Link key={r.id} to={`/portfolio/${r.measureId}`}
-                  className="flex items-start gap-3 px-4 py-3 hover:bg-slate-50 transition-colors">
-                  <AlertTriangle className={`w-4 h-4 mt-0.5 shrink-0 ${r.level === 'Critical' ? 'text-red-500' : 'text-amber-500'}`} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-foreground truncate">{r.title}</p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5 truncate">{r.measureTitle}</p>
-                  </div>
-                  <RiskBadge level={r.level} className="shrink-0" />
-                </Link>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── Section 3: Transformation Maturity ────────────────────── */}
-      <section>
-        <div className="flex items-end justify-between mb-4">
+        <div className="flex items-end justify-between mb-5">
           <SectionHeader
             title="Transformation Maturity"
             description="Forecast impact distributed across DI maturity levels"
@@ -324,8 +228,27 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="bg-white rounded-xl border border-border p-5 shadow-sm">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-5">
+        <div className="bg-white rounded-xl border border-border p-6 shadow-sm">
+          {maturityView === 'overall' && (
+            <div className="grid grid-cols-3 gap-4 mb-7">
+              <div className="text-center bg-slate-50 rounded-lg p-4 border border-border">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1.5">Forecast Impact</p>
+                <p className="text-xl font-bold text-foreground">{formatCurrency(kpis.forecastImpact)}</p>
+              </div>
+              <div className="text-center bg-slate-50 rounded-lg p-4 border border-border">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1.5">Target Impact</p>
+                <p className="text-xl font-bold text-foreground">{formatCurrency(kpis.targetImpact)}</p>
+              </div>
+              <div className={`text-center rounded-lg p-4 border ${forecastGap >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1.5">Gap to Target</p>
+                <p className={`text-xl font-bold ${forecastGap >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                  {forecastGap >= 0 ? '+' : ''}{formatCurrency(forecastGap)}
+                </p>
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mb-6">
             {DI_LEVELS.map(di => (
               <div key={di} className="flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded-sm inline-block shrink-0"
@@ -335,29 +258,10 @@ export default function Dashboard() {
             ))}
           </div>
 
-          {maturityView === 'overall' && (
-            <div className="grid grid-cols-3 gap-3 mb-5">
-              <div className="text-center bg-slate-50 rounded-lg p-3 border border-border">
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Forecast Impact</p>
-                <p className="text-lg font-bold text-foreground">{formatCurrency(kpis.forecastImpact)}</p>
-              </div>
-              <div className="text-center bg-slate-50 rounded-lg p-3 border border-border">
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Target Impact</p>
-                <p className="text-lg font-bold text-foreground">{formatCurrency(kpis.targetImpact)}</p>
-              </div>
-              <div className={`text-center rounded-lg p-3 border ${forecastGap >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Gap to Target</p>
-                <p className={`text-lg font-bold ${forecastGap >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
-                  {forecastGap >= 0 ? '+' : ''}{formatCurrency(forecastGap)}
-                </p>
-              </div>
-            </div>
-          )}
-
-          <ResponsiveContainer width="100%" height={maturityView === 'overall' ? 200 : 260}>
+          <ResponsiveContainer width="100%" height={maturityView === 'overall' ? 300 : 360}>
             <BarChart data={maturityData} margin={{ top: 4, right: 80, bottom: 0, left: -10 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-              <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
+              <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false}
                 tickFormatter={(v: number) => `€${v}M`} />
               <Tooltip
@@ -386,22 +290,19 @@ export default function Dashboard() {
         </div>
       </section>
 
-      {/* ── Section 4: Value Delivery ──────────────────────────────── */}
+      {/* ── Section 3: Value Delivery ──────────────────────────────── */}
       <section>
-        <SectionHeader title="Value Delivery" description="From ambition to realistic forecast — and programme delivery trajectory" />
+        <SectionHeader title="Value Delivery" description="Target-to-forecast bridge and monthly delivery trajectory" />
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Waterfall */}
-          <div className="bg-white rounded-xl border border-border p-5 shadow-sm">
-            <div className="mb-4">
-              <h3 className="text-sm font-semibold text-foreground">Transformation Waterfall</h3>
-              <p className="text-xs text-muted-foreground mt-0.5">Target → forecast bridge (€M)</p>
-            </div>
-            <ResponsiveContainer width="100%" height={240}>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="bg-white rounded-xl border border-border p-6 shadow-sm">
+            <h3 className="text-sm font-semibold text-foreground mb-1">Transformation Waterfall</h3>
+            <p className="text-xs text-muted-foreground mb-6">Target → forecast bridge (€M)</p>
+            <ResponsiveContainer width="100%" height={280}>
               <BarChart data={waterfall} margin={{ top: 4, right: 4, bottom: 0, left: -20 }} barCategoryGap={6}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false}
+                <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false}
                   tickFormatter={(v: number) => `€${v}M`} />
                 <Tooltip
                   contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e2e8f0' }}
@@ -420,20 +321,19 @@ export default function Dashboard() {
             </ResponsiveContainer>
           </div>
 
-          {/* Impact Trend */}
-          <div className="lg:col-span-2 bg-white rounded-xl border border-border p-5 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
+          <div className="bg-white rounded-xl border border-border p-6 shadow-sm">
+            <div className="flex items-start justify-between mb-6">
               <div>
                 <h3 className="text-sm font-semibold text-foreground">Impact Trend</h3>
                 <p className="text-xs text-muted-foreground mt-0.5">Monthly impact in €M — 2024</p>
               </div>
-              <div className="flex items-center gap-4 text-xs text-muted-foreground">
+              <div className="flex items-center gap-4 text-xs text-muted-foreground shrink-0">
                 <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-blue-500 inline-block rounded" />Target</span>
                 <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-emerald-500 inline-block rounded" />Forecast</span>
                 <span className="flex items-center gap-1.5"><span className="w-3 h-2 bg-teal-400/40 inline-block rounded" />Realized</span>
               </div>
             </div>
-            <ResponsiveContainer width="100%" height={240}>
+            <ResponsiveContainer width="100%" height={280}>
               <AreaChart data={impactTrend} margin={{ top: 4, right: 4, bottom: 0, left: -10 }}>
                 <defs>
                   <linearGradient id="realized" x1="0" y1="0" x2="0" y2="1">
@@ -461,42 +361,38 @@ export default function Dashboard() {
             </ResponsiveContainer>
           </div>
         </div>
-
-        {/* Impact by Program */}
-        <div className="mt-4 bg-white rounded-xl border border-border p-5 shadow-sm">
-          <div className="mb-4">
-            <h3 className="text-sm font-semibold text-foreground">Impact by Program</h3>
-            <p className="text-xs text-muted-foreground mt-0.5">Forecast impact per program (€M) — sorted by contribution</p>
-          </div>
-          <ResponsiveContainer width="100%" height={130}>
-            <BarChart data={impactByProgram} layout="vertical" margin={{ top: 0, right: 60, bottom: 0, left: 10 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
-              <XAxis type="number" tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false}
-                tickFormatter={(v: number) => `€${v}M`} />
-              <YAxis dataKey="name" type="category" tick={{ fontSize: 11, fill: '#64748B' }}
-                axisLine={false} tickLine={false} width={130} />
-              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e2e8f0' }}
-                formatter={(v: unknown) => [`€${Number(v).toFixed(1)}M`, 'Forecast Impact']} />
-              <Bar dataKey="value" fill="#2563EB" radius={[0, 4, 4, 0]}
-                label={{ position: 'right', fontSize: 11, fill: '#64748B',
-                  formatter: (v: unknown) => `€${Number(v).toFixed(0)}M` }} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
       </section>
 
-      {/* ── Section 5: Transformation Analytics ───────────────────── */}
+      {/* ── Section 4: Portfolio Breakdown ────────────────────────── */}
       <section>
-        <SectionHeader title="Transformation Analytics" description="Portfolio breakdown by category, P&L, status and workforce impact" />
+        <SectionHeader title="Portfolio Breakdown" description="Value distribution by program, category and workforce impact" />
 
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-          {/* By Category */}
-          <div className="bg-white rounded-xl border border-border p-5 shadow-sm">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-white rounded-xl border border-border p-6 shadow-sm">
+            <h3 className="text-sm font-semibold text-foreground mb-1">Impact by Program</h3>
+            <p className="text-xs text-muted-foreground mb-6">Forecast in €M</p>
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={impactByProgram} layout="vertical" margin={{ top: 0, right: 50, bottom: 0, left: 10 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
+                <XAxis type="number" tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false}
+                  tickFormatter={(v: number) => `€${v}M`} />
+                <YAxis dataKey="name" type="category" tick={{ fontSize: 10, fill: '#64748B' }}
+                  axisLine={false} tickLine={false} width={110} />
+                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e2e8f0' }}
+                  formatter={(v: unknown) => [`€${Number(v).toFixed(1)}M`, 'Forecast Impact']} />
+                <Bar dataKey="value" fill="#2563EB" radius={[0, 4, 4, 0]}
+                  label={{ position: 'right', fontSize: 11, fill: '#64748B',
+                    formatter: (v: unknown) => `€${Number(v).toFixed(0)}M` }} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className="bg-white rounded-xl border border-border p-6 shadow-sm">
             <h3 className="text-sm font-semibold text-foreground mb-1">Impact by Category</h3>
-            <p className="text-xs text-muted-foreground mb-3">Target impact in €M</p>
-            <ResponsiveContainer width="100%" height={170}>
+            <p className="text-xs text-muted-foreground mb-6">Target impact in €M</p>
+            <ResponsiveContainer width="100%" height={200}>
               <PieChart>
-                <Pie data={byCategory} cx="50%" cy="50%" innerRadius={45} outerRadius={68}
+                <Pie data={byCategory} cx="50%" cy="50%" innerRadius={52} outerRadius={78}
                   paddingAngle={2} dataKey="value"
                   label={({ name, percent }: { name: string; percent: number }) =>
                     `${name} ${(percent * 100).toFixed(0)}%`}
@@ -509,45 +405,9 @@ export default function Dashboard() {
             </ResponsiveContainer>
           </div>
 
-          {/* By P&L */}
-          <div className="bg-white rounded-xl border border-border p-5 shadow-sm">
-            <h3 className="text-sm font-semibold text-foreground mb-1">Impact by P&amp;L Line</h3>
-            <p className="text-xs text-muted-foreground mb-3">Target in €M (top 8)</p>
-            <ResponsiveContainer width="100%" height={170}>
-              <BarChart data={byPnL} layout="vertical" margin={{ top: 0, right: 4, bottom: 0, left: -22 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
-                <XAxis type="number" tick={{ fontSize: 9, fill: '#94A3B8' }} axisLine={false} tickLine={false}
-                  tickFormatter={(v: number) => `€${v}M`} />
-                <YAxis dataKey="name" type="category" tick={{ fontSize: 8.5, fill: '#94A3B8' }}
-                  axisLine={false} tickLine={false} width={95} />
-                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e2e8f0' }}
-                  formatter={(v: unknown) => [`€${Number(v).toFixed(1)}M`, '']} />
-                <Bar dataKey="value" fill="#6366F1" radius={[0, 3, 3, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* By Status */}
-          <div className="bg-white rounded-xl border border-border p-5 shadow-sm">
-            <h3 className="text-sm font-semibold text-foreground mb-1">Measures by Status</h3>
-            <p className="text-xs text-muted-foreground mb-3">Execution status</p>
-            <ResponsiveContainer width="100%" height={170}>
-              <PieChart>
-                <Pie data={byStatus} cx="50%" cy="50%" innerRadius={40} outerRadius={62}
-                  paddingAngle={2} dataKey="value">
-                  {byStatus.map(e => <Cell key={e.name} fill={statusColors[e.name] ?? '#94A3B8'} />)}
-                </Pie>
-                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e2e8f0' }} />
-                <Legend iconType="circle" iconSize={7}
-                  formatter={(v: string) => <span className="text-[10px] text-slate-600">{v}</span>} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* FTE Impact */}
-          <div className="bg-white rounded-xl border border-border p-5 shadow-sm">
+          <div className="bg-white rounded-xl border border-border p-6 shadow-sm">
             <h3 className="text-sm font-semibold text-foreground mb-1">FTE Impact</h3>
-            <p className="text-xs text-muted-foreground mb-4">Program team headcount</p>
+            <p className="text-xs text-muted-foreground mb-6">Program headcount</p>
             <div className="space-y-2.5">
               <FTEKpiCard label="FTE Target" value={ftes.target} accent="slate" />
               <FTEKpiCard label="FTE Forecast" value={ftes.forecast}
@@ -557,7 +417,7 @@ export default function Dashboard() {
                 sub={`${Math.round((ftes.realized / ftes.target) * 100)}% deployed`}
                 accent="blue" />
             </div>
-            <div className="mt-4 space-y-2">
+            <div className="mt-5 space-y-2.5">
               <FTEBarSmall label="Target" value={ftes.target}
                 max={Math.max(ftes.target, ftes.forecast) * 1.1} color="bg-slate-300" />
               <FTEBarSmall label="Forecast" value={ftes.forecast}
@@ -566,35 +426,6 @@ export default function Dashboard() {
               <FTEBarSmall label="Realized" value={ftes.realized}
                 max={Math.max(ftes.target, ftes.forecast) * 1.1} color="bg-blue-500" />
             </div>
-          </div>
-        </div>
-
-        {/* Top Measures table */}
-        <div className="mt-4 bg-white rounded-xl border border-border shadow-sm">
-          <div className="flex items-center justify-between p-5 border-b border-border">
-            <div>
-              <h3 className="text-sm font-semibold text-foreground">Top Measures by Value</h3>
-              <p className="text-xs text-muted-foreground mt-0.5">Highest forecast impact across the portfolio</p>
-            </div>
-            <Link to="/portfolio" className="text-xs text-blue-600 hover:text-blue-700 font-medium flex items-center gap-0.5">
-              View all <ChevronRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-          <div className="divide-y divide-border">
-            {[...measures].sort((a, b) => b.forecastImpact - a.forecastImpact).slice(0, 6).map((m, i) => (
-              <Link key={m.id} to={`/portfolio/${m.id}`}
-                className="flex items-center gap-3 px-5 py-3.5 hover:bg-slate-50 transition-colors">
-                <span className="text-xs font-bold text-muted-foreground w-5 shrink-0">{i + 1}</span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-foreground truncate">{m.title}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{m.program} · {m.workstream}</p>
-                </div>
-                <div className="text-right shrink-0">
-                  <p className="text-sm font-semibold text-foreground">{formatCurrency(m.forecastImpact)}</p>
-                  <StatusBadge status={m.status} className="mt-0.5 text-[10px] py-0" />
-                </div>
-              </Link>
-            ))}
           </div>
         </div>
       </section>
@@ -612,7 +443,7 @@ interface SectionHeaderProps {
 
 function SectionHeader({ title, description, inline }: SectionHeaderProps) {
   return (
-    <div className={inline ? '' : 'mb-4'}>
+    <div className={inline ? '' : 'mb-5'}>
       <h2 className="text-sm font-bold text-foreground tracking-tight">{title}</h2>
       <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
     </div>
@@ -638,7 +469,7 @@ function KpiCard({ label, value, sub, icon, accent }: KpiCardProps) {
   }[accent]
 
   return (
-    <div className="bg-white rounded-xl border border-border p-4 shadow-sm flex flex-col gap-3">
+    <div className="bg-white rounded-xl border border-border p-5 shadow-sm flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <p className="text-xs font-medium text-muted-foreground leading-tight">{label}</p>
         <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${a.bg} ${a.text}`}>{icon}</div>
@@ -646,6 +477,36 @@ function KpiCard({ label, value, sub, icon, accent }: KpiCardProps) {
       <div>
         <p className="text-2xl font-bold text-foreground tracking-tight">{value}</p>
         <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>
+      </div>
+    </div>
+  )
+}
+
+function GovernanceCard({ di2, di4, highRisk }: { di2: number; di4: number; highRisk: number }) {
+  const total = di2 + di4 + highRisk
+  const hasIssues = total > 0
+  return (
+    <div className="bg-white rounded-xl border border-border p-5 shadow-sm flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-medium text-muted-foreground leading-tight">Governance Attention</p>
+        <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${hasIssues ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'}`}>
+          <AlertTriangle className="w-4 h-4" />
+        </div>
+      </div>
+      <div>
+        <p className="text-2xl font-bold text-foreground tracking-tight">{total}</p>
+        <p className="text-xs text-muted-foreground mt-0.5">Items requiring action</p>
+      </div>
+      <div className="flex items-center gap-3 pt-2 border-t border-border">
+        <span className="text-[10px] text-muted-foreground">
+          DI2: <span className={`font-semibold ${di2 > 0 ? 'text-amber-600' : 'text-slate-400'}`}>{di2}</span>
+        </span>
+        <span className="text-[10px] text-muted-foreground">
+          DI4: <span className={`font-semibold ${di4 > 0 ? 'text-amber-600' : 'text-slate-400'}`}>{di4}</span>
+        </span>
+        <span className="text-[10px] text-muted-foreground">
+          Risk: <span className={`font-semibold ${highRisk > 0 ? 'text-red-600' : 'text-slate-400'}`}>{highRisk}</span>
+        </span>
       </div>
     </div>
   )
