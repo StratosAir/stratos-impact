@@ -59,12 +59,12 @@ interface DIBadgeProps {
 
 export function DIBadge({ level, className, size = 'md' }: DIBadgeProps) {
   const colorMap: Record<DILevel, string> = {
-    DI0: 'bg-slate-100 text-slate-600 border border-slate-200',
-    DI1: 'bg-violet-50 text-violet-700 border border-violet-200',
-    DI2: 'bg-blue-50 text-blue-700 border border-blue-200',
-    DI3: 'bg-indigo-50 text-indigo-700 border border-indigo-200',
-    DI4: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
-    DI5: 'bg-teal-50 text-teal-700 border border-teal-200',
+    DI0: 'bg-slate-100 text-slate-500 border border-slate-200',
+    DI1: 'bg-slate-200 text-slate-600 border border-slate-300',
+    DI2: 'bg-slate-300/60 text-slate-700 border border-slate-300',
+    DI3: 'bg-blue-100 text-blue-700 border border-blue-200',
+    DI4: 'bg-blue-600 text-white border border-blue-700',
+    DI5: 'bg-[#1e3a5f] text-white border border-[#1e3a5f]',
   }
 
   return (
