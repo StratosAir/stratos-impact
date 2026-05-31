@@ -1,14 +1,20 @@
 import { useMemo, useState } from 'react'
 import {
   BarChart, Bar, Cell, AreaChart, Area, PieChart, Pie,
+  LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   ReferenceLine,
 } from 'recharts'
 import {
   TrendingUp, TrendingDown, AlertTriangle, CheckCircle2,
-  Target, Activity,
+  Target, Activity, ArrowRight,
 } from 'lucide-react'
 import { measures } from '@/data/measures'
+import {
+  DATA_FREEZES, getFreezePortfolioEvolution, getDIProgressions,
+  getMeasureSnapshot, getPreviousFreezeId,
+} from '@/data/freezes'
+import { useDataFreeze } from '@/contexts/DataFreezeContext'
 import { formatCurrency } from '@/lib/utils'
 import type { DILevel } from '@/types'
 
@@ -56,23 +62,45 @@ const DI_LEVELS: DILevel[] = ['DI0', 'DI1', 'DI2', 'DI3', 'DI4', 'DI5']
 
 export default function Dashboard() {
   const [maturityView, setMaturityView] = useState<'overall' | 'programs'>('overall')
+  const { selectedFreeze } = useDataFreeze()
 
+  // KPIs computed for the selected freeze
   const kpis = useMemo(() => {
-    const active = measures.filter(m => m.status !== 'Cancelled')
+    const active = measures.filter(m => {
+      const snap = getMeasureSnapshot(m.id, selectedFreeze)
+      return snap.status !== 'Cancelled'
+    })
     return {
       targetImpact: active.reduce((s, m) => s + m.targetImpact, 0),
-      forecastImpact: active.reduce((s, m) => s + m.forecastImpact, 0),
+      forecastImpact: active.reduce((s, m) => s + getMeasureSnapshot(m.id, selectedFreeze).forecastImpact, 0),
       realizedImpact: active.reduce((s, m) => s + m.realizedImpact, 0),
       activeMeasures: active.length,
       openDI2: measures.filter(m => m.approvals.some(a => a.type === 'DI2' && a.status === 'Pending')).length,
       openDI4: measures.filter(m => m.approvals.some(a => a.type === 'DI4' && a.status === 'Pending')).length,
       highRisk: measures.filter(m => m.riskLevel === 'High' || m.riskLevel === 'Critical').length,
     }
-  }, [])
+  }, [selectedFreeze])
 
   const forecastGap = kpis.forecastImpact - kpis.targetImpact
   const achievementPct = Math.round((kpis.realizedImpact / kpis.targetImpact) * 100)
   const targetImpactM = Math.round(kpis.targetImpact / 1e6 * 10) / 10
+
+  // Portfolio evolution across all freezes (independent of selection)
+  const portfolioEvolution = useMemo(() => getFreezePortfolioEvolution(), [])
+
+  // Forecast delta vs previous freeze
+  const prevFreezeId = getPreviousFreezeId(selectedFreeze)
+  const forecastDelta = useMemo(() => {
+    if (!prevFreezeId) return null
+    const prevTotal = measures.reduce((s, m) => s + getMeasureSnapshot(m.id, prevFreezeId).forecastImpact, 0)
+    return kpis.forecastImpact - prevTotal
+  }, [kpis.forecastImpact, prevFreezeId])
+
+  // DI progressions since previous freeze
+  const diProgressions = useMemo(() => {
+    if (!prevFreezeId) return []
+    return getDIProgressions(prevFreezeId, selectedFreeze)
+  }, [prevFreezeId, selectedFreeze])
 
   const impactTrend = useMemo(() => {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -87,42 +115,49 @@ export default function Dashboard() {
   }, [])
 
   const maturityOverall = useMemo((): MaturityPoint[] => {
-    const active = measures.filter(m => m.status !== 'Cancelled')
+    const active = measures.filter(m => getMeasureSnapshot(m.id, selectedFreeze).status !== 'Cancelled')
     const data = { DI0: 0, DI1: 0, DI2: 0, DI3: 0, DI4: 0, DI5: 0 }
-    active.forEach(m => { data[m.diLevel] = Math.round((data[m.diLevel] + m.forecastImpact / 1e6) * 10) / 10 })
+    active.forEach(m => {
+      const snap = getMeasureSnapshot(m.id, selectedFreeze)
+      data[snap.diLevel] = Math.round((data[snap.diLevel] + snap.forecastImpact / 1e6) * 10) / 10
+    })
     return [{ name: 'Project Horizon', ...data }]
-  }, [])
+  }, [selectedFreeze])
 
   const maturityByProgram = useMemo((): MaturityPoint[] => {
     return PROGRAMS.map(prog => {
       const data = { DI0: 0, DI1: 0, DI2: 0, DI3: 0, DI4: 0, DI5: 0 }
-      measures.filter(m => m.program === prog && m.status !== 'Cancelled')
-        .forEach(m => { data[m.diLevel] = Math.round((data[m.diLevel] + m.forecastImpact / 1e6) * 10) / 10 })
+      measures
+        .filter(m => m.program === prog && getMeasureSnapshot(m.id, selectedFreeze).status !== 'Cancelled')
+        .forEach(m => {
+          const snap = getMeasureSnapshot(m.id, selectedFreeze)
+          data[snap.diLevel] = Math.round((data[snap.diLevel] + snap.forecastImpact / 1e6) * 10) / 10
+        })
       return { name: PROGRAM_SHORT[prog] ?? prog, ...data }
     })
-  }, [])
+  }, [selectedFreeze])
 
   const waterfall = useMemo((): WaterfallItem[] => {
-    const active = measures.filter(m => m.status !== 'Cancelled')
+    const active = measures.filter(m => getMeasureSnapshot(m.id, selectedFreeze).status !== 'Cancelled')
     const r = (v: number) => Math.round(v * 10) / 10
     const targetM = r(active.reduce((s, m) => s + m.targetImpact, 0) / 1e6)
-    const forecastM = r(active.reduce((s, m) => s + m.forecastImpact, 0) / 1e6)
+    const forecastM = r(active.reduce((s, m) => s + getMeasureSnapshot(m.id, selectedFreeze).forecastImpact, 0) / 1e6)
 
     const upsideM = r(active
-      .filter(m => m.forecastImpact > m.targetImpact)
-      .reduce((s, m) => s + (m.forecastImpact - m.targetImpact), 0) / 1e6)
+      .filter(m => getMeasureSnapshot(m.id, selectedFreeze).forecastImpact > m.targetImpact)
+      .reduce((s, m) => s + (getMeasureSnapshot(m.id, selectedFreeze).forecastImpact - m.targetImpact), 0) / 1e6)
 
     const riskM = r(active
-      .filter(m => (m.riskLevel === 'High' || m.riskLevel === 'Critical') && m.forecastImpact < m.targetImpact)
-      .reduce((s, m) => s + (m.targetImpact - m.forecastImpact), 0) / 1e6)
+      .filter(m => (m.riskLevel === 'High' || m.riskLevel === 'Critical') && getMeasureSnapshot(m.id, selectedFreeze).forecastImpact < m.targetImpact)
+      .reduce((s, m) => s + (m.targetImpact - getMeasureSnapshot(m.id, selectedFreeze).forecastImpact), 0) / 1e6)
 
     const delayM = r(active
-      .filter(m => m.status === 'At Risk' && m.riskLevel === 'Low' && m.forecastImpact < m.targetImpact)
-      .reduce((s, m) => s + (m.targetImpact - m.forecastImpact), 0) / 1e6)
+      .filter(m => getMeasureSnapshot(m.id, selectedFreeze).status === 'At Risk' && m.riskLevel === 'Low' && getMeasureSnapshot(m.id, selectedFreeze).forecastImpact < m.targetImpact)
+      .reduce((s, m) => s + (m.targetImpact - getMeasureSnapshot(m.id, selectedFreeze).forecastImpact), 0) / 1e6)
 
     const allNegM = r(active
-      .filter(m => m.forecastImpact < m.targetImpact)
-      .reduce((s, m) => s + (m.targetImpact - m.forecastImpact), 0) / 1e6)
+      .filter(m => getMeasureSnapshot(m.id, selectedFreeze).forecastImpact < m.targetImpact)
+      .reduce((s, m) => s + (m.targetImpact - getMeasureSnapshot(m.id, selectedFreeze).forecastImpact), 0) / 1e6)
     const scopeM = r(Math.max(0, allNegM - riskM - delayM))
 
     const items: WaterfallItem[] = [
@@ -146,26 +181,27 @@ export default function Dashboard() {
     }
     items.push({ name: 'Forecast', invisible: 0, value: forecastM, fill: '#2563EB' })
     return items
-  }, [])
+  }, [selectedFreeze])
 
   const impactByProgram = useMemo(() =>
     PROGRAMS.map(prog => ({
       name: PROGRAM_SHORT[prog] ?? prog,
       value: Math.round(
-        measures.filter(m => m.program === prog).reduce((s, m) => s + m.forecastImpact, 0) / 1e6 * 10
+        measures.filter(m => m.program === prog)
+          .reduce((s, m) => s + getMeasureSnapshot(m.id, selectedFreeze).forecastImpact, 0) / 1e6 * 10
       ) / 10,
     })).sort((a, b) => b.value - a.value),
-    []
+    [selectedFreeze]
   )
 
   const ftes = useMemo(() => {
-    const active = measures.filter(m => m.status !== 'Cancelled')
+    const active = measures.filter(m => getMeasureSnapshot(m.id, selectedFreeze).status !== 'Cancelled')
     return {
       target: active.reduce((s, m) => s + m.fteTarget, 0),
       forecast: active.reduce((s, m) => s + m.fteForecast, 0),
       realized: active.reduce((s, m) => s + m.fteRealized, 0),
     }
-  }, [])
+  }, [selectedFreeze])
 
   const byCategory = useMemo(() => {
     const sums: Record<string, number> = {}
@@ -179,6 +215,9 @@ export default function Dashboard() {
     Revenue: '#2563EB', Cost: '#F97316', Structural: '#8B5CF6',
   }
 
+  // Selected freeze index for highlighting
+  const selectedFreezeIndex = DATA_FREEZES.findIndex(f => f.id === selectedFreeze)
+
   return (
     <div className="p-8 space-y-12">
 
@@ -186,7 +225,7 @@ export default function Dashboard() {
       <section>
         <SectionHeader
           title="Executive Summary"
-          description="Project Horizon — transformation performance at a glance"
+          description={`Project Horizon — transformation performance at a glance · ${selectedFreeze}`}
         />
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
           <KpiCard label="Target Impact" value={formatCurrency(kpis.targetImpact)}
@@ -204,7 +243,122 @@ export default function Dashboard() {
         </div>
       </section>
 
-      {/* ── Section 2: Transformation Maturity ────────────────────── */}
+      {/* ── Section 2: Portfolio Evolution ────────────────────────── */}
+      <section>
+        <SectionHeader
+          title="Portfolio Evolution"
+          description="How the transformation portfolio developed across reporting cycles"
+        />
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Line chart spanning 2 columns */}
+          <div className="lg:col-span-2 bg-white rounded-xl border border-border p-6 shadow-sm">
+            <div className="flex items-start justify-between mb-6">
+              <div>
+                <h3 className="text-sm font-semibold text-foreground">Forecast Impact by Data Freeze</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">Portfolio forecast in €M across reporting cycles</p>
+              </div>
+              <span className="text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded-lg px-2.5 py-1 font-semibold">
+                {selectedFreeze}
+              </span>
+            </div>
+            <ResponsiveContainer width="100%" height={220}>
+              <LineChart data={portfolioEvolution} margin={{ top: 8, right: 16, bottom: 0, left: -10 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false}
+                  tickFormatter={(v: number) => `€${v}M`}
+                  domain={['dataMin - 20', 'dataMax + 20']} />
+                <Tooltip
+                  contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e2e8f0' }}
+                  formatter={(v: unknown) => [`€${Number(v).toFixed(1)}M`, 'Forecast Impact']}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="forecast"
+                  stroke="#2563EB"
+                  strokeWidth={2.5}
+                  dot={(props: { cx: number; cy: number; index: number }) => {
+                    const isSelected = props.index === selectedFreezeIndex
+                    return (
+                      <circle
+                        key={props.index}
+                        cx={props.cx}
+                        cy={props.cy}
+                        r={isSelected ? 6 : 4}
+                        fill={isSelected ? '#2563EB' : '#fff'}
+                        stroke="#2563EB"
+                        strokeWidth={2}
+                      />
+                    )
+                  }}
+                  activeDot={{ r: 6 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Right column: delta KPI + DI progress */}
+          <div className="flex flex-col gap-4">
+
+            {/* Forecast Change vs Previous Freeze */}
+            <div className="bg-white rounded-xl border border-border p-5 shadow-sm flex flex-col gap-3">
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">Forecast Change</p>
+                <p className="text-[10px] text-muted-foreground">vs {prevFreezeId ?? '—'}</p>
+              </div>
+              {forecastDelta !== null ? (
+                <div className="flex items-end gap-2">
+                  <p className={`text-2xl font-bold tracking-tight ${forecastDelta >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+                    {forecastDelta >= 0 ? '+' : ''}{formatCurrency(forecastDelta)}
+                  </p>
+                  {forecastDelta >= 0
+                    ? <TrendingUp className="w-5 h-5 text-emerald-500 mb-1" />
+                    : <TrendingDown className="w-5 h-5 text-red-400 mb-1" />
+                  }
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No prior freeze</p>
+              )}
+              <p className={`text-xs font-medium ${forecastDelta != null && forecastDelta >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                {forecastDelta != null && forecastDelta >= 0 ? '▲ Portfolio improving' : '▼ Portfolio under pressure'}
+              </p>
+            </div>
+
+            {/* DI Progress widget */}
+            <div className="bg-white rounded-xl border border-border p-5 shadow-sm flex-1">
+              <p className="text-xs font-medium text-muted-foreground mb-0.5">DI Progress</p>
+              <p className="text-[10px] text-muted-foreground mb-4">Since {prevFreezeId ?? '—'}</p>
+              {diProgressions.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No progressions in this period</p>
+              ) : (
+                <div className="space-y-2.5">
+                  {diProgressions.map(({ from, to, count }) => (
+                    <div key={`${from}-${to}`} className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-xs">
+                        <span className="inline-flex items-center justify-center w-8 h-5 rounded text-[10px] font-bold"
+                          style={{ backgroundColor: DI_COLORS[from], color: from === 'DI0' || from === 'DI1' ? '#475569' : '#fff' }}>
+                          {from}
+                        </span>
+                        <ArrowRight className="w-3 h-3 text-muted-foreground shrink-0" />
+                        <span className="inline-flex items-center justify-center w-8 h-5 rounded text-[10px] font-bold"
+                          style={{ backgroundColor: DI_COLORS[to], color: to === 'DI0' || to === 'DI1' ? '#475569' : '#fff' }}>
+                          {to}
+                        </span>
+                      </div>
+                      <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">
+                        +{count} {count === 1 ? 'Measure' : 'Measures'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Section 3: Transformation Maturity ────────────────────── */}
       <section>
         <div className="flex items-end justify-between mb-5">
           <SectionHeader
@@ -290,7 +444,7 @@ export default function Dashboard() {
         </div>
       </section>
 
-      {/* ── Section 3: Value Delivery ──────────────────────────────── */}
+      {/* ── Section 4: Value Delivery ──────────────────────────────── */}
       <section>
         <SectionHeader title="Value Delivery" description="Target-to-forecast bridge and monthly delivery trajectory" />
 
@@ -363,7 +517,7 @@ export default function Dashboard() {
         </div>
       </section>
 
-      {/* ── Section 4: Portfolio Breakdown ────────────────────────── */}
+      {/* ── Section 5: Portfolio Breakdown ────────────────────────── */}
       <section>
         <SectionHeader title="Portfolio Breakdown" description="Value distribution by program, category and workforce impact" />
 

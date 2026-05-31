@@ -1,7 +1,9 @@
 import { useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { Search, SlidersHorizontal, ChevronUp, ChevronDown, ArrowUpDown, X } from 'lucide-react'
+import { Search, SlidersHorizontal, ChevronUp, ChevronDown, ArrowUpDown, X, GitCompare, TrendingUp, TrendingDown, Database } from 'lucide-react'
 import { measures } from '@/data/measures'
+import { DATA_FREEZES, getMeasureSnapshot, getPreviousFreezeId } from '@/data/freezes'
+import { useDataFreeze } from '@/contexts/DataFreezeContext'
 import { formatCurrency } from '@/lib/utils'
 import { StatusBadge, RiskBadge, DIBadge, CategoryBadge } from '@/components/StatusBadge'
 import type { Measure, MeasureStatus, MeasureCategory, RiskLevel, DILevel } from '@/types'
@@ -12,6 +14,7 @@ type SortDir = 'asc' | 'desc'
 const ALL = 'All'
 
 export default function Portfolio() {
+  const { selectedFreeze, compareFreeze, setCompareFreeze } = useDataFreeze()
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState<string>(ALL)
   const [filterCategory, setFilterCategory] = useState<string>(ALL)
@@ -21,6 +24,9 @@ export default function Portfolio() {
   const [sortKey, setSortKey] = useState<SortKey>('id')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
   const [showFilters, setShowFilters] = useState(false)
+  const [compareOpen, setCompareOpen] = useState(false)
+
+  const prevFreezeId = getPreviousFreezeId(selectedFreeze)
 
   const businessUnits = useMemo(() => [ALL, ...Array.from(new Set(measures.map(m => m.businessUnit))).sort()], [])
   const statuses: string[] = [ALL, 'On Track', 'Watch', 'At Risk', 'Completed', 'Cancelled']
@@ -28,8 +34,31 @@ export default function Portfolio() {
   const diLevels: string[] = [ALL, 'DI0', 'DI1', 'DI2', 'DI3', 'DI4', 'DI5']
   const riskLevels: string[] = [ALL, 'Low', 'Medium', 'High', 'Critical']
 
+  // Measures enriched with freeze-aware data
+  const frozenMeasures = useMemo(() => measures.map(m => {
+    const snap = getMeasureSnapshot(m.id, selectedFreeze)
+    return { ...m, diLevel: snap.diLevel, status: snap.status, forecastImpact: snap.forecastImpact }
+  }), [selectedFreeze])
+
+  const activeCompare = compareFreeze ?? prevFreezeId
+
+  // Delta data per measure (compare freeze vs selected)
+  const deltaMap = useMemo(() => {
+    if (!activeCompare) return new Map<string, { forecastDelta: number; diFrom: DILevel; diTo: DILevel; diChanged: boolean }>()
+    return new Map(measures.map(m => {
+      const curr = getMeasureSnapshot(m.id, selectedFreeze)
+      const prev = getMeasureSnapshot(m.id, activeCompare)
+      return [m.id, {
+        forecastDelta: curr.forecastImpact - prev.forecastImpact,
+        diFrom: prev.diLevel,
+        diTo: curr.diLevel,
+        diChanged: prev.diLevel !== curr.diLevel,
+      }]
+    }))
+  }, [selectedFreeze, activeCompare])
+
   const filtered = useMemo(() => {
-    let list = measures.filter(m => {
+    let list = frozenMeasures.filter(m => {
       if (filterStatus !== ALL && m.status !== filterStatus) return false
       if (filterCategory !== ALL && m.category !== filterCategory) return false
       if (filterBU !== ALL && m.businessUnit !== filterBU) return false
@@ -56,7 +85,7 @@ export default function Portfolio() {
     })
 
     return list
-  }, [search, filterStatus, filterCategory, filterBU, filterDI, filterRisk, sortKey, sortDir])
+  }, [frozenMeasures, search, filterStatus, filterCategory, filterBU, filterDI, filterRisk, sortKey, sortDir])
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) {
@@ -74,8 +103,69 @@ export default function Portfolio() {
 
   const activeFilterCount = [filterStatus, filterCategory, filterBU, filterDI, filterRisk].filter(f => f !== ALL).length
 
+  // Comparison freezes available (all except selected)
+  const compareOptions = DATA_FREEZES.filter(f => f.id !== selectedFreeze)
+
+  const isComparing = Boolean(activeCompare)
+
   return (
     <div className="p-6 space-y-4">
+      {/* Freeze context bar */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+          <Database className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+          <span className="text-xs font-semibold text-blue-700">Current Freeze: {selectedFreeze}</span>
+        </div>
+
+        {/* Compare selector */}
+        <div className="relative">
+          <button
+            onClick={() => setCompareOpen(v => !v)}
+            className={`flex items-center gap-2 px-3 py-2 text-xs rounded-lg border transition-colors font-medium ${
+              isComparing
+                ? 'border-violet-500 bg-violet-50 text-violet-700'
+                : 'border-border bg-white text-muted-foreground hover:text-foreground hover:bg-muted'
+            }`}
+          >
+            <GitCompare className="w-3.5 h-3.5 shrink-0" />
+            {isComparing ? `Compare: ${activeCompare}` : 'Compare to…'}
+            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${compareOpen ? 'rotate-180' : ''}`} />
+          </button>
+          {compareOpen && (
+            <div className="absolute left-0 top-full mt-1.5 w-48 bg-white rounded-xl border border-border shadow-lg py-1.5 z-50">
+              {compareFreeze && (
+                <button
+                  onClick={() => { setCompareFreeze(null); setCompareOpen(false) }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs text-red-600 hover:bg-red-50 transition-colors"
+                >
+                  <X className="w-3 h-3" /> Clear comparison
+                </button>
+              )}
+              {compareOptions.map(f => (
+                <button
+                  key={f.id}
+                  onClick={() => { setCompareFreeze(f.id); setCompareOpen(false) }}
+                  className={`w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-muted transition-colors ${
+                    activeCompare === f.id ? 'bg-violet-50 text-violet-700 font-semibold' : 'text-foreground'
+                  }`}
+                >
+                  <Database className="w-3.5 h-3.5 text-muted-foreground" />
+                  {f.label}
+                  {f.id === prevFreezeId && <span className="ml-auto text-[10px] text-muted-foreground">previous</span>}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {isComparing && (
+          <span className="text-xs text-violet-600 font-medium flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full bg-violet-400 inline-block" />
+            Showing deltas vs {activeCompare}
+          </span>
+        )}
+      </div>
+
       {/* Header & Search */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[200px] max-w-sm">
@@ -146,12 +236,12 @@ export default function Portfolio() {
                   { key: 'businessUnit', label: 'Business Unit', w: 'w-36' },
                   { key: 'workstream', label: 'Workstream', w: 'w-36' },
                   { key: 'owner', label: 'Owner', w: 'w-32' },
-                  { key: 'diLevel', label: 'DI Level', w: 'w-24' },
+                  { key: 'diLevel', label: 'DI Level', w: isComparing ? 'w-40' : 'w-24' },
                   { key: 'status', label: 'Status', w: 'w-28' },
                   { key: 'category', label: 'Category', w: 'w-24' },
                   { key: 'riskLevel', label: 'Risk', w: 'w-24' },
                   { key: 'targetImpact', label: 'Target', w: 'w-24 text-right' },
-                  { key: 'forecastImpact', label: 'Forecast', w: 'w-24 text-right' },
+                  { key: 'forecastImpact', label: 'Forecast', w: isComparing ? 'w-36 text-right' : 'w-24 text-right' },
                   { key: 'realizedImpact', label: 'Realized', w: 'w-24 text-right' },
                 ].map(col => (
                   <th
@@ -168,38 +258,61 @@ export default function Portfolio() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {filtered.map(m => (
-                <tr key={m.id} className="hover:bg-slate-50/60 transition-colors">
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <span className="text-xs font-mono font-semibold text-blue-600">{m.id}</span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <Link
-                      to={`/portfolio/${m.id}`}
-                      className="font-medium text-foreground hover:text-blue-600 transition-colors line-clamp-2"
-                    >
-                      {m.title}
-                    </Link>
-                    <p className="text-xs text-muted-foreground mt-0.5">{m.division}</p>
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-xs text-foreground">{m.businessUnit}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-xs text-muted-foreground">{m.workstream}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-xs text-foreground">{m.owner}</td>
-                  <td className="px-4 py-3 whitespace-nowrap"><DIBadge level={m.diLevel} /></td>
-                  <td className="px-4 py-3 whitespace-nowrap"><StatusBadge status={m.status} /></td>
-                  <td className="px-4 py-3 whitespace-nowrap"><CategoryBadge category={m.category} /></td>
-                  <td className="px-4 py-3 whitespace-nowrap"><RiskBadge level={m.riskLevel} /></td>
-                  <td className="px-4 py-3 whitespace-nowrap text-right font-semibold text-foreground text-xs">{formatCurrency(m.targetImpact)}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-right text-xs">
-                    <span className={m.forecastImpact >= m.targetImpact ? 'text-emerald-600 font-medium' : 'text-amber-600 font-medium'}>
-                      {formatCurrency(m.forecastImpact)}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-right text-xs font-medium text-slate-600">
-                    {formatCurrency(m.realizedImpact)}
-                  </td>
-                </tr>
-              ))}
+              {filtered.map(m => {
+                const delta = deltaMap.get(m.id)
+                return (
+                  <tr key={m.id} className="hover:bg-slate-50/60 transition-colors">
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <span className="text-xs font-mono font-semibold text-blue-600">{m.id}</span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <Link
+                        to={`/portfolio/${m.id}`}
+                        className="font-medium text-foreground hover:text-blue-600 transition-colors line-clamp-2"
+                      >
+                        {m.title}
+                      </Link>
+                      <p className="text-xs text-muted-foreground mt-0.5">{m.division}</p>
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-xs text-foreground">{m.businessUnit}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-xs text-muted-foreground">{m.workstream}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-xs text-foreground">{m.owner}</td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <div className="flex items-center gap-1.5">
+                        <DIBadge level={m.diLevel} />
+                        {isComparing && delta?.diChanged && (
+                          <span className="text-[10px] text-violet-600 font-semibold bg-violet-50 border border-violet-200 rounded px-1.5 py-0.5 whitespace-nowrap">
+                            {delta.diFrom}→{delta.diTo}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap"><StatusBadge status={m.status} /></td>
+                    <td className="px-4 py-3 whitespace-nowrap"><CategoryBadge category={m.category} /></td>
+                    <td className="px-4 py-3 whitespace-nowrap"><RiskBadge level={m.riskLevel} /></td>
+                    <td className="px-4 py-3 whitespace-nowrap text-right font-semibold text-foreground text-xs">{formatCurrency(m.targetImpact)}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-right text-xs">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <span className={m.forecastImpact >= m.targetImpact ? 'text-emerald-600 font-medium' : 'text-amber-600 font-medium'}>
+                          {formatCurrency(m.forecastImpact)}
+                        </span>
+                        {isComparing && delta && delta.forecastDelta !== 0 && (
+                          <span className={`text-[10px] font-semibold flex items-center gap-0.5 ${delta.forecastDelta > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                            {delta.forecastDelta > 0
+                              ? <TrendingUp className="w-3 h-3" />
+                              : <TrendingDown className="w-3 h-3" />
+                            }
+                            {delta.forecastDelta > 0 ? '+' : ''}{(delta.forecastDelta / 1e6).toFixed(1)}M
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-right text-xs font-medium text-slate-600">
+                      {formatCurrency(m.realizedImpact)}
+                    </td>
+                  </tr>
+                )
+              })}
               {filtered.length === 0 && (
                 <tr>
                   <td colSpan={12} className="px-4 py-16 text-center text-sm text-muted-foreground">
